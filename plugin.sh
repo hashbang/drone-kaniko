@@ -35,6 +35,8 @@ DOCKERFILE=${PLUGIN_DOCKERFILE:-Dockerfile}
 CONTEXT=${PLUGIN_CONTEXT:-$PWD}
 LOG=${PLUGIN_LOG:-info}
 EXTRA_OPTS=""
+SHOW_DIGEST="true"
+DIGEST_FILE=${PLUGIN_DIGEST_FILE:-/tmp/digest}
 
 if [[ -n "${PLUGIN_TARGET:-}" ]]; then
     TARGET="--target=${PLUGIN_TARGET}"
@@ -90,25 +92,29 @@ if [[ "${PLUGIN_AUTO_TAG:-}" == "true" ]]; then
         major=$(echo "${TAG}" |awk -F'.' '{print $1}')
         minor=$(echo "${TAG}" |awk -F'.' '{print $2}')
         release=$(echo "${TAG}" |awk -F'.' '{print $3}')
-    
+
         major=${major:-0}
         minor=${minor:-0}
         release=${release:-0}
-    
+
         echo "${major},${major}.${minor},${major}.${minor}.${release},latest" > .tags
-    fi  
+    fi
 fi
 
 if [ -n "${PLUGIN_TAGS:-}" ]; then
     DESTINATIONS=$(echo "${PLUGIN_TAGS}" | tr ',' '\n' | while read tag; do echo "--destination=${REGISTRY}/${PLUGIN_REPO}:${tag} "; done)
+    EXTRA_OPTS="${EXTRA_OPTS} --image-name-tag-with-digest-file=${DIGEST_FILE}"
 elif [ -f .tags ]; then
     DESTINATIONS=$(cat .tags| tr ',' '\n' | while read tag; do echo "--destination=${REGISTRY}/${PLUGIN_REPO}:${tag} "; done)
+    EXTRA_OPTS="${EXTRA_OPTS} --image-name-tag-with-digest-file=${DIGEST_FILE}"
 elif [ -n "${PLUGIN_REPO:-}" ]; then
     DESTINATIONS="--destination=${REGISTRY}/${PLUGIN_REPO}:latest"
+    EXTRA_OPTS="${EXTRA_OPTS} --image-name-tag-with-digest-file=${DIGEST_FILE}"
 else
     DESTINATIONS="--no-push"
     # Cache is not valid with --no-push
     CACHE=""
+    SHOW_DIGEST="false"
 fi
 
 /kaniko/executor -v ${LOG} \
@@ -122,3 +128,7 @@ fi
     ${TARGET:-} \
     ${BUILD_ARGS:-} \
     ${BUILD_ARGS_FROM_ENV:-}
+
+if [ "${SHOW_DIGEST}" == "true" ]; then
+  cat "${DIGEST_FILE}"
+fi
